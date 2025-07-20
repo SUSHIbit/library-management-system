@@ -1051,5 +1051,536 @@ document.addEventListener('DOMContentLoaded', function() {
     LibraryApp.init();
 });
 
+/**
+ * Books Module JavaScript
+ * Library Management System
+ * 
+ * Handles book-specific functionality including search, filters, and form validation
+ */
+
+'use strict';
+
+// Book Management Object
+window.BookManager = {
+    
+    // Initialize book module
+    init: function() {
+        this.bindEvents();
+        this.initializeSearch();
+        this.initializeFormValidation();
+        console.log('Book module initialized');
+    },
+    
+    // Bind events
+    bindEvents: function() {
+        // Search form enhancement
+        const searchForm = document.querySelector('.search-form');
+        if (searchForm) {
+            this.enhanceSearchForm(searchForm);
+        }
+        
+        // Book grid interactions
+        this.bindBookCardEvents();
+        
+        // Form enhancements
+        this.bindFormEvents();
+    },
+    
+    // Enhanced search functionality
+    initializeSearch: function() {
+        const searchInput = document.querySelector('input[name="search"]');
+        const categoryFilter = document.querySelector('select[name="category"]');
+        
+        if (searchInput) {
+            // Add search suggestions
+            this.addSearchSuggestions(searchInput);
+            
+            // Auto-search with debounce
+            let searchTimeout;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    BookManager.performSearch();
+                }, 500);
+            });
+        }
+        
+        if (categoryFilter) {
+            categoryFilter.addEventListener('change', function() {
+                BookManager.performSearch();
+            });
+        }
+    },
+    
+    // Add search suggestions
+    addSearchSuggestions: function(searchInput) {
+        const suggestions = [
+            'Introduction to Algorithms',
+            'Clean Code',
+            'Design Patterns',
+            'JavaScript',
+            'Python',
+            'Java',
+            'Data Structures'
+        ];
+        
+        // Create datalist
+        const datalist = document.createElement('datalist');
+        datalist.id = 'book-suggestions';
+        
+        suggestions.forEach(suggestion => {
+            const option = document.createElement('option');
+            option.value = suggestion;
+            datalist.appendChild(option);
+        });
+        
+        searchInput.setAttribute('list', 'book-suggestions');
+        searchInput.parentNode.appendChild(datalist);
+    },
+    
+    // Perform search
+    performSearch: function() {
+        const form = document.querySelector('.search-form');
+        if (form && this.shouldAutoSearch()) {
+            // Show loading state
+            this.showSearchLoading(true);
+            
+            // Submit form via AJAX for seamless experience
+            const formData = new FormData(form);
+            const params = new URLSearchParams(formData);
+            
+            fetch(window.location.pathname + '?' + params.toString())
+                .then(response => response.text())
+                .then(html => {
+                    this.updateSearchResults(html);
+                })
+                .catch(error => {
+                    console.error('Search error:', error);
+                })
+                .finally(() => {
+                    this.showSearchLoading(false);
+                });
+        }
+    },
+    
+    // Check if auto-search should be performed
+    shouldAutoSearch: function() {
+        const searchInput = document.querySelector('input[name="search"]');
+        return searchInput && searchInput.value.length >= 2;
+    },
+    
+    // Show/hide search loading
+    showSearchLoading: function(show) {
+        const booksGrid = document.querySelector('.books-grid');
+        if (booksGrid) {
+            if (show) {
+                booksGrid.style.opacity = '0.5';
+                booksGrid.style.pointerEvents = 'none';
+            } else {
+                booksGrid.style.opacity = '1';
+                booksGrid.style.pointerEvents = 'auto';
+            }
+        }
+    },
+    
+    // Update search results
+    updateSearchResults: function(html) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        const newBooksGrid = doc.querySelector('.books-grid');
+        const currentBooksGrid = document.querySelector('.books-grid');
+        
+        if (newBooksGrid && currentBooksGrid) {
+            currentBooksGrid.innerHTML = newBooksGrid.innerHTML;
+            this.bindBookCardEvents();
+        }
+        
+        // Update pagination
+        const newPagination = doc.querySelector('.pagination-nav');
+        const currentPagination = document.querySelector('.pagination-nav');
+        
+        if (newPagination && currentPagination) {
+            currentPagination.innerHTML = newPagination.innerHTML;
+        }
+    },
+    
+    // Bind book card events
+    bindBookCardEvents: function() {
+        const bookCards = document.querySelectorAll('.book-card');
+        
+        bookCards.forEach(card => {
+            // Add hover effects
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-4px)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+            });
+            
+            // Quick view functionality
+            const viewBtn = card.querySelector('.btn-secondary');
+            if (viewBtn) {
+                viewBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    BookManager.showQuickView(this.href);
+                });
+            }
+        });
+    },
+    
+    // Show quick view modal
+    showQuickView: function(url) {
+        // Create modal if it doesn't exist
+        let modal = document.getElementById('quickViewModal');
+        if (!modal) {
+            modal = this.createQuickViewModal();
+        }
+        
+        // Load content
+        fetch(url)
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                const content = doc.querySelector('.book-details-container');
+                if (content) {
+                    modal.querySelector('.modal-body').innerHTML = content.innerHTML;
+                    modal.classList.add('show');
+                }
+            })
+            .catch(error => {
+                console.error('Quick view error:', error);
+            });
+    },
+    
+    // Create quick view modal
+    createQuickViewModal: function() {
+        const modal = document.createElement('div');
+        modal.id = 'quickViewModal';
+        modal.className = 'modal';
+        
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Book Details</h5>
+                        <button type="button" class="modal-close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        Loading...
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Bind close events
+        modal.querySelector('.modal-close').addEventListener('click', function() {
+            modal.classList.remove('show');
+        });
+        
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        });
+        
+        return modal;
+    },
+    
+    // Form validation and enhancement
+    bindFormEvents: function() {
+        const bookForm = document.querySelector('.book-form');
+        if (bookForm) {
+            this.enhanceBookForm(bookForm);
+        }
+    },
+    
+    // Enhance book form
+    enhanceBookForm: function(form) {
+        // ISBN validation and formatting
+        const isbnInput = form.querySelector('input[name="isbn"]');
+        if (isbnInput) {
+            this.enhanceISBNInput(isbnInput);
+        }
+        
+        // Auto-suggest authors
+        const authorInput = form.querySelector('input[name="author"]');
+        if (authorInput) {
+            this.enhanceAuthorInput(authorInput);
+        }
+        
+        // Publication year validation
+        const yearInput = form.querySelector('input[name="publication_year"]');
+        if (yearInput) {
+            this.enhanceYearInput(yearInput);
+        }
+        
+        // Form submission enhancement
+        form.addEventListener('submit', function(e) {
+            if (!BookManager.validateBookForm(form)) {
+                e.preventDefault();
+            }
+        });
+    },
+    
+    // Enhance ISBN input
+    enhanceISBNInput: function(input) {
+        input.addEventListener('input', function() {
+            let value = this.value.replace(/[^0-9X]/gi, '');
+            
+            // Format ISBN
+            if (value.length > 3) {
+                value = value.substring(0, 3) + '-' + value.substring(3);
+            }
+            if (value.length > 5) {
+                value = value.substring(0, 5) + '-' + value.substring(5);
+            }
+            if (value.length > 12) {
+                value = value.substring(0, 12) + '-' + value.substring(12);
+            }
+            if (value.length > 15) {
+                value = value.substring(0, 15) + '-' + value.substring(15);
+            }
+            
+            this.value = value;
+        });
+        
+        input.addEventListener('blur', function() {
+            if (this.value && !BookManager.validateISBN(this.value)) {
+                this.classList.add('is-invalid');
+                BookManager.showFieldError(this, 'Please enter a valid ISBN.');
+            } else {
+                this.classList.remove('is-invalid');
+                BookManager.clearFieldError(this);
+            }
+        });
+    },
+    
+    // Validate ISBN
+    validateISBN: function(isbn) {
+        // Remove hyphens and spaces
+        isbn = isbn.replace(/[-\s]/g, '');
+        
+        // Check length
+        if (isbn.length !== 10 && isbn.length !== 13) {
+            return false;
+        }
+        
+        // Basic format validation
+        if (isbn.length === 10) {
+            return /^[0-9]{9}[0-9X]$/i.test(isbn);
+        } else {
+            return /^[0-9]{13}$/.test(isbn);
+        }
+    },
+    
+    // Enhance author input
+    enhanceAuthorInput: function(input) {
+        const commonAuthors = [
+            'Robert C. Martin',
+            'Martin Fowler',
+            'Gang of Four',
+            'Thomas H. Cormen',
+            'Donald E. Knuth',
+            'Steve McConnell'
+        ];
+        
+        // Add autocomplete
+        const datalist = document.createElement('datalist');
+        datalist.id = 'author-suggestions';
+        
+        commonAuthors.forEach(author => {
+            const option = document.createElement('option');
+            option.value = author;
+            datalist.appendChild(option);
+        });
+        
+        input.setAttribute('list', 'author-suggestions');
+        input.parentNode.appendChild(datalist);
+    },
+    
+    // Enhance year input
+    enhanceYearInput: function(input) {
+        const currentYear = new Date().getFullYear();
+        
+        input.addEventListener('input', function() {
+            const year = parseInt(this.value);
+            
+            if (this.value && (year < 1800 || year > currentYear)) {
+                this.classList.add('is-invalid');
+                BookManager.showFieldError(this, `Year must be between 1800 and ${currentYear}.`);
+            } else {
+                this.classList.remove('is-invalid');
+                BookManager.clearFieldError(this);
+            }
+        });
+    },
+    
+    // Validate book form
+    validateBookForm: function(form) {
+        let isValid = true;
+        
+        // Clear previous errors
+        form.querySelectorAll('.is-invalid').forEach(input => {
+            input.classList.remove('is-invalid');
+        });
+        
+        form.querySelectorAll('.form-error').forEach(error => {
+            error.textContent = '';
+        });
+        
+        // Required fields
+        const requiredFields = ['title', 'author', 'category_id', 'quantity'];
+        requiredFields.forEach(fieldName => {
+            const field = form.querySelector(`[name="${fieldName}"]`);
+            if (field && !field.value.trim()) {
+                field.classList.add('is-invalid');
+                this.showFieldError(field, 'This field is required.');
+                isValid = false;
+            }
+        });
+        
+        // ISBN validation
+        const isbnInput = form.querySelector('input[name="isbn"]');
+        if (isbnInput && isbnInput.value && !this.validateISBN(isbnInput.value)) {
+            isbnInput.classList.add('is-invalid');
+            this.showFieldError(isbnInput, 'Please enter a valid ISBN.');
+            isValid = false;
+        }
+        
+        // Quantity validation
+        const quantityInput = form.querySelector('input[name="quantity"]');
+        if (quantityInput) {
+            const quantity = parseInt(quantityInput.value);
+            if (quantity < 1) {
+                quantityInput.classList.add('is-invalid');
+                this.showFieldError(quantityInput, 'Quantity must be at least 1.');
+                isValid = false;
+            }
+        }
+        
+        // Publication year validation
+        const yearInput = form.querySelector('input[name="publication_year"]');
+        if (yearInput && yearInput.value) {
+            const year = parseInt(yearInput.value);
+            const currentYear = new Date().getFullYear();
+            if (year < 1800 || year > currentYear) {
+                yearInput.classList.add('is-invalid');
+                this.showFieldError(yearInput, `Year must be between 1800 and ${currentYear}.`);
+                isValid = false;
+            }
+        }
+        
+        return isValid;
+    },
+    
+    // Show field error
+    showFieldError: function(field, message) {
+        let errorElement = field.parentNode.querySelector('.form-error');
+        if (!errorElement) {
+            errorElement = document.createElement('div');
+            errorElement.className = 'form-error';
+            field.parentNode.appendChild(errorElement);
+        }
+        errorElement.textContent = message;
+    },
+    
+    // Clear field error
+    clearFieldError: function(field) {
+        const errorElement = field.parentNode.querySelector('.form-error');
+        if (errorElement) {
+            errorElement.textContent = '';
+        }
+    },
+    
+    // Initialize form validation
+    initializeFormValidation: function() {
+        const forms = document.querySelectorAll('form[data-validate="true"]');
+        
+        forms.forEach(form => {
+            // Real-time validation
+            const inputs = form.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                input.addEventListener('blur', function() {
+                    BookManager.validateField(this);
+                });
+                
+                input.addEventListener('input', function() {
+                    if (this.classList.contains('is-invalid')) {
+                        BookManager.validateField(this);
+                    }
+                });
+            });
+        });
+    },
+    
+    // Validate single field
+    validateField: function(field) {
+        const value = field.value.trim();
+        const required = field.hasAttribute('required');
+        
+        // Clear previous error
+        field.classList.remove('is-invalid');
+        this.clearFieldError(field);
+        
+        // Required validation
+        if (required && !value) {
+            field.classList.add('is-invalid');
+            this.showFieldError(field, 'This field is required.');
+            return false;
+        }
+        
+        // Field-specific validation
+        switch (field.name) {
+            case 'isbn':
+                if (value && !this.validateISBN(value)) {
+                    field.classList.add('is-invalid');
+                    this.showFieldError(field, 'Please enter a valid ISBN.');
+                    return false;
+                }
+                break;
+                
+            case 'quantity':
+                if (value && parseInt(value) < 1) {
+                    field.classList.add('is-invalid');
+                    this.showFieldError(field, 'Quantity must be at least 1.');
+                    return false;
+                }
+                break;
+                
+            case 'publication_year':
+                if (value) {
+                    const year = parseInt(value);
+                    const currentYear = new Date().getFullYear();
+                    if (year < 1800 || year > currentYear) {
+                        field.classList.add('is-invalid');
+                        this.showFieldError(field, `Year must be between 1800 and ${currentYear}.`);
+                        return false;
+                    }
+                }
+                break;
+        }
+        
+        return true;
+    }
+};
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.location.pathname.includes('/books/')) {
+        BookManager.init();
+    }
+});
+
+// Export for global access
+window.BookManager = BookManager;
+
 // Export for global access
 window.LibraryApp = LibraryApp;
